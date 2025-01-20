@@ -1,0 +1,16 @@
+
+default:
+    image: $CI_REGISTRY/dwp/digital-debt-service/docker/dm12-ansible:v4
+  
+include:
+    - local: pipelines/.common-windows.gitlab-ci.yml # Pipeline jobs to ensure configuration common across all Windows VMs is deployed to all environments
+stages:
+- DEVT
+- TEST
+- TEST2
+- lint
+- STAGE
+- PROD
+# Colorize Gitlab Pipeline output.
+variables:
+  ANSIBLE_FORCE_COLOR: 'true'
