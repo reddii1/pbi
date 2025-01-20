@@ -1,0 +1,310 @@
+# Login snippet for DEVT subscription
+.azure-login-devt: &azure-login-devt
+  - export ARM_CLIENT_ID=$DEVT_CLIENT_ID ARM_CLIENT_SECRET=$DEVT_CLIENT_SECRET ARM_TENANT_ID=$TENANT_ID ARM_SUBSCRIPTION_ID=$DEVT_SUBSCRIPTION_ID ANSIBLE_CONFIG=ansible.cfg && AZURE_PROFILE=test
+  - mkdir ~/.azure && echo -en '[test]\n' > ~/.azure/credentials && echo -en "subscription_id=$ARM_SUBSCRIPTION_ID\n" >> ~/.azure/credentials && echo -en "client_id=$ARM_CLIENT_ID\n" >> ~/.azure/credentials  && echo -en "secret=$ARM_CLIENT_SECRET\n" >> ~/.azure/credentials && echo -en "tenant=$ARM_TENANT_ID\n" >> ~/.azure/credentials
+  - az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+  - az account set --subscription $DEVT_SUBSCRIPTION_NAME
+  #- az keyvault secret download --vault-name kv-uks-devt-dd-mif-core --name ansible-vault-password --file .vault_pass
+  # - az keyvault secret download --vault-name kv-uks-test-dd-mif-core --name azureuser-private-key --file azureuser.privatekey
+  #- chmod 0600 azureuser.privatekey
+# Login snippet for TEST subscription
+.azure-login-test: &azure-login-test
+  - export ARM_CLIENT_ID=$TEST_CLIENT_ID ARM_CLIENT_SECRET=$TEST_CLIENT_SECRET ARM_TENANT_ID=$TENANT_ID ARM_SUBSCRIPTION_ID=$TEST_SUBSCRIPTION_ID ANSIBLE_CONFIG=ansible.cfg && AZURE_PROFILE=test
+  - mkdir ~/.azure && echo -en '[test]\n' > ~/.azure/credentials && echo -en "subscription_id=$ARM_SUBSCRIPTION_ID\n" >> ~/.azure/credentials && echo -en "client_id=$ARM_CLIENT_ID\n" >> ~/.azure/credentials  && echo -en "secret=$ARM_CLIENT_SECRET\n" >> ~/.azure/credentials && echo -en "tenant=$ARM_TENANT_ID\n" >> ~/.azure/credentials
+  - az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+  - az account set --subscription $TEST_SUBSCRIPTION_NAME
+  - az keyvault secret download --vault-name kv-uks-test-dd-mif-core --name ansible-vault-password --file .vault_pass
+  # - az keyvault secret download --vault-name kv-uks-test-dd-mif-core --name azureuser-private-key --file azureuser.privatekey
+  #- chmod 0600 azureuser.privatekey
+.azure-login-stage: &azure-login-stage
+  - export ARM_CLIENT_ID=$STAGE_CLIENT_ID ARM_CLIENT_SECRET=$STAGE_CLIENT_SECRET ARM_TENANT_ID=$TENANT_ID ARM_SUBSCRIPTION_ID=$STAGE_SUBSCRIPTION_ID ANSIBLE_CONFIG=ansible.cfg && AZURE_PROFILE=test
+  - mkdir ~/.azure && echo -en '[test]\n' > ~/.azure/credentials && echo -en "subscription_id=$ARM_SUBSCRIPTION_ID\n" >> ~/.azure/credentials && echo -en "client_id=$ARM_CLIENT_ID\n" >> ~/.azure/credentials  && echo -en "secret=$ARM_CLIENT_SECRET\n" >> ~/.azure/credentials && echo -en "tenant=$ARM_TENANT_ID\n" >> ~/.azure/credentials
+  - az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+  - az account set --subscription $STAGE_SUBSCRIPTION_NAME
+  #- az keyvault secret download --vault-name kv-uks-stag-dd-mif-core --name ansible-vault-password --file .vault_pass
+  # - az keyvault secret download --vault-name kv-uks-test-dd-mif-core --name azureuser-private-key --file azureuser.privatekey
+  #- chmod 0600 azureuser.privatekey
+.azure-login-prod: &azure-login-prod
+  - export ARM_CLIENT_ID=$PROD_CLIENT_ID ARM_CLIENT_SECRET=$PROD_CLIENT_SECRET ARM_TENANT_ID=$TENANT_ID ARM_SUBSCRIPTION_ID=$PROD_SUBSCRIPTION_ID ANSIBLE_CONFIG=ansible.cfg && AZURE_PROFILE=test
+  - mkdir ~/.azure && echo -en '[test]\n' > ~/.azure/credentials && echo -en "subscription_id=$ARM_SUBSCRIPTION_ID\n" >> ~/.azure/credentials && echo -en "client_id=$ARM_CLIENT_ID\n" >> ~/.azure/credentials  && echo -en "secret=$ARM_CLIENT_SECRET\n" >> ~/.azure/credentials && echo -en "tenant=$ARM_TENANT_ID\n" >> ~/.azure/credentials
+  - az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+  - az account set --subscription $PROD_SUBSCRIPTION_NAME
+  #- az keyvault secret download --vault-name kv-uks-stag-dd-mif-core --name ansible-vault-password --file .vault_pass
+  # - az keyvault secret download --vault-name kv-uks-test-dd-mif-core --name azureuser-private-key --file azureuser.privatekey
+  #- chmod 0600 azureuser.privatekey
+
+.ansible-collections: &ansible-collections
+  - pip install -r requirements-azure.txt # Ensure Python packages required for Azure modules are installed consistently.
+  - ansible-galaxy install -r requirements.yml -vvvv -ic # Ensire required Ansible collections are installed consistently.
+
+common-windows-devt:
+  stage: DEVT
+  before_script:
+    - *azure-login-devt
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-windows.yml -i inventory/devt/hosts
+  tags:
+    - dd-mif-devt
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-sql-db-devt:
+  stage: DEVT
+  before_script:
+    - *azure-login-devt
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql.yml -i inventory/devt/hosts
+  tags:
+    - dd-mif-devt
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-crs-sql-db-devt:
+  stage: DEVT
+  before_script:
+    - *azure-login-devt
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql-crs.yml -i inventory/devt/hosts
+  tags:
+    - dd-mif-devt
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-sql-crs.yml
+      when: manual
+      allow_failure: true
+
+common-dm6-sql-db-devt:
+  stage: DEVT
+  before_script:
+    - *azure-login-devt
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvvv playbooks/common-sql-dm6.yml -i inventory/devt/hosts
+  tags:
+    - dd-mif-devt
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-sql-dm6.yml
+      when: manual
+      allow_failure: true
+
+common-dm6-sql-db-test:
+  stage: TEST
+  before_script:
+    - *azure-login-test
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvvv playbooks/common-sql-dm6.yml -i inventory/test/hosts
+  tags:
+    - dd-mif-test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-sql-dm6.yml
+      when: manual
+      allow_failure: true
+
+common-windows-test:
+  stage: TEST
+  before_script:
+    - *azure-login-test
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-windows.yml -i inventory/test/hosts
+  tags:
+    - dd-mif-test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-sql-db-test:
+  stage: TEST
+  before_script:
+    - *azure-login-test
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql.yml -i inventory/test/hosts
+  tags:
+    - dd-mif-test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-crs-sql-db-test:
+  stage: TEST
+  before_script:
+    - *azure-login-test
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql-crs.yml -i inventory/test/hosts
+  tags:
+    - dd-mif-test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-sql-crs.yml
+      when: manual
+      allow_failure: true
+
+common-windows-test2:
+  stage: TEST2
+  before_script:
+    - *azure-login-test
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-windows.yml -i inventory/test2/hosts
+  tags:
+    - dd-mif-test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-sql-db2:
+  stage: TEST2
+  before_script:
+    - *azure-login-test
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql.yml -i inventory/test2/hosts
+  tags:
+    - dd-mif-test
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-windows-stage:
+  stage: STAGE
+  before_script:
+    - *azure-login-stage
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-windows.yml -i inventory/stage/hosts
+  tags:
+    - dd-mif-stag
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-sql-db-stage:
+  stage: STAGE
+  before_script:
+    - *azure-login-stage
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql.yml -i inventory/stage/hosts
+  tags:
+    - dd-mif-stag
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-crs-sql-db-stage:
+  stage: STAGE
+  before_script:
+    - *azure-login-stage
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql-crs.yml -i inventory/stage/hosts
+  tags:
+    - dd-mif-stag
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-sql-crs.yml
+      when: manual
+      allow_failure: true
+
+common-windows-prod:
+  stage: PROD
+  before_script:
+    - *azure-login-prod
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-windows.yml -i inventory/prod/hosts
+  tags:
+    - dd-mif-prod
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-sql-db-prod:
+  stage: PROD
+  before_script:
+    - *azure-login-prod
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql.yml -i inventory/prod/hosts
+  tags:
+    - dd-mif-prod
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-windows.yml
+      when: manual
+      allow_failure: true
+
+common-crs-sql-db-prod:
+  stage: PROD
+  before_script:
+    - *azure-login-prod
+    - *ansible-collections
+  script:
+    - ansible-playbook -vvv playbooks/common-sql-crs.yml -i inventory/prod/hosts
+  tags:
+    - dd-mif-prod
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      changes:
+        - pipelines/.common-windows.gitlab-ci.yml
+        - playbooks/common-sql-crs.yml
+      when: manual
+      allow_failure: true
