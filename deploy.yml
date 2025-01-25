@@ -1,0 +1,1495 @@
+name: $(BuildDefinitionName)_$(Date:ddMMyy)_$(BuildId)
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+      - feature/*
+schedules:
+  - cron: "0 7 * * *"
+    displayName: DailyCreate
+    branches:
+      include:
+        - main
+    always: "true"
+
+variables:
+  - group: Credentials
+
+stages:
+  ##############################################################################################################
+  # Sandbox
+  # - stage: SBOX
+  #   displayName: SBOX
+  #   variables:
+  #     - name: SUBSCRIPTION_NAME
+  #       value: "DC-CNV-SBOX"
+  #     # Pipeline Variables
+  #     - name: ENVIRONMENT
+  #       value: "sbox"
+  #   pool:
+  #     vmImage: "ubuntu-latest"
+  #   jobs:
+  #     - job: Validate
+  #       displayName: PDU Blueprint
+  #       timeoutInMinutes: 90
+
+  #       steps:
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+  #             export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+  #             # Install Terraform
+  #             echo "Instaling required verison of terraform..."
+  #             TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+  #             wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+  #             unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+  #             rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+  #             sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+  #             echo "Finished installing Terraform....."
+  #             echo "Running terraform..."
+  #             export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+  #             echo $ARM_SUBSCRIPTION_NAME
+  #             echo $ARM_SUBSCRIPTION_ID
+
+  #             # Install JQuery
+  #             sudo apt-get install jq -y
+
+  #             cd terraform/
+  #             ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #             ./terraform workspace new $(ENVIRONMENT) || true
+  #             ./terraform workspace select $(ENVIRONMENT) || true
+  #             ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #             echo $(terraform workspace show)
+  #             ./terraform --version
+
+  #             # Validate Terraform
+  #             echo "Validating Terraform"
+  #             if [[ $(./terraform validate -json | jq '.valid') == 'true' ]]; then
+  #                 echo "Terraform deployment is valid"
+  #             else
+  #                 echo "Terraform deployment is invalid"
+  #                 echo $(./terraform validate -json | jq '.diagnostics[].detail')
+  #                 exit 1
+  #             fi
+
+  #             # Terraform Plan
+  #             # Validate Terraform
+  #             echo "Validating Terraform and producing tfplan..."
+  #             echo "Creating plan file"
+  #             mkdir /tmp/tfplan
+  #             echo $(Build.BuildNumber)
+  #             echo $(Build.BuildId)
+  #             ./terraform plan --var-file=./terraform.tfvars  -out=/tmp/tfplan/$(SUBSCRIPTION_NAME).tfplan
+  #           displayName: "Validate"
+
+  #         # Create artifacts
+  #         - task: ArchiveFiles@2
+  #           displayName: "Zip Artifacts"
+  #           inputs:
+  #             rootFolderOrFile: "/tmp/tfplan/"
+  #             archiveType: "tar"
+  #             tarCompression: "gz"
+  #             archiveFile: "$(Build.ArtifactStagingDirectory)/$(SUBSCRIPTION_NAME)-build-$(Build.BuildId).tfplan.tar.gz"
+  #             replaceExistingArchive: true
+
+  #         # Publish Artifacts
+  #         - task: PublishBuildArtifacts@1
+  #           displayName: "Publish Artifacts"
+  #           inputs:
+  #             PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+  #             ArtifactName: "$(SUBSCRIPTION_NAME)"
+
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+  #             export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+  #             # Install Terraform
+  #             echo "Instaling required verison of terraform..."
+  #             TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+  #             wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+  #             unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+  #             rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+  #             sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+  #             echo "Finished installing Terraform....."
+  #             echo "Running terraform..."
+  #             export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+  #             echo $ARM_SUBSCRIPTION_NAME
+  #             echo $ARM_SUBSCRIPTION_ID
+
+  #             echo "Running terraform..."
+  #             cd terraform/
+  #             ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #             ./terraform workspace new $(ENVIRONMENT) || true
+  #             ./terraform workspace select $(ENVIRONMENT) || true
+  #             ./terraform --version
+  #             ./terraform apply --var-file=./terraform.tfvars -auto-approve
+  #             echo "Setting up security centre contacts"
+  #             az security contact create --email 'crc.smi@dwp.gov.uk' --name default --alert-notifications 'on' --alerts-admins 'on'  || true
+  #             az security contact create --email 'sre.azure@engineering.digital.dwp.gov.uk' --name default2 --alert-notifications 'on' --alerts-admins 'on'  || true
+  #           displayName: "Deploy"
+
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export AZURE_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export AZURE_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export AZURE_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export AZURE_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             echo $(az account show)
+
+  #             # Install Inspec
+  #             echo "Installing Inspec CLI"
+
+  #             TEMP_DEB="$(mktemp)" &&
+  #             wget -O "$TEMP_DEB" 'https://packages.chef.io/files/stable/inspec/4.18.51/ubuntu/18.04/inspec_4.18.51-1_amd64.deb' &&
+  #             sudo dpkg -i "$TEMP_DEB"
+  #             rm -f "$TEMP_DEB"
+
+  #             echo "Installed Inspec CLI"
+
+  #             # Inspec Directory
+  #             cd inspec/
+
+  #             # Run Inspec Tests
+  #             echo "Running Inspec Tests"
+  #             inspec exec azure --input-file azure/inputs/$(ENVIRONMENT).yml -t azure:// --reporter cli html:$(ENVIRONMENT)-report.html --chef-license=accept --no-distinct-exit
+  #           displayName: "Inspec-Test"
+
+  #           # Publish report
+  #         - task: PublishBuildArtifacts@1
+  #           displayName: "Publish Artifacts"
+  #           inputs:
+  #             PathtoPublish: "inspec/$(ENVIRONMENT)-report.html"
+  #             ArtifactName: "inspec-report-$(ENVIRONMENT)"
+
+  #############################################################################################################
+  # Development
+  - stage: DEVT
+    displayName: DEVT
+    # dependsOn: SBOX
+    condition: succeeded()
+    variables:
+      - name: SUBSCRIPTION_NAME
+        value: "DC-CNV-DEVT"
+      # Pipeline Variables
+      - name: ENVIRONMENT
+        value: "devt"
+    pool:
+      vmImage: "ubuntu-latest"
+    jobs:
+      - job: Validate
+        displayName: PDU Blueprint
+        timeoutInMinutes: 90
+
+        steps:
+          - script: |
+              set -Eeuo pipefail
+              trap "echo ERR trap fired!" ERR
+
+              # Login to Azure Subscription
+              echo "Logging in to Azure Subscription"
+              az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+              az account set --subscription "$(SUBSCRIPTION_NAME)"
+              echo "Logged in to Azure Subscription successfully"
+
+              # Create Terraform State Storage Account
+              DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+              BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+              ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+              STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+              RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+              if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+              then
+                  echo
+                  echo "Terraform State Storage Account Already Exists"
+              else
+                  echo
+                  echo "Creating Terraform State Storage Account"
+
+                  # Create Resource Group
+                  az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+                  # Lock Resource Group
+                  az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+                  # Create Storage Account
+                  az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+                  --kind "StorageV2" \
+                  --access-tier "Cool" \
+                  --sku "Standard_ZRS" \
+                  --https-only "true" \
+                  --location "uksouth"
+
+                  # Create Container
+                  az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+                  # Enable Soft Delete
+                  az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+                  echo "Terraform State Storage Account Created Successfully"
+              fi
+
+              # Set Environment Variables
+              export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+              export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+              export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+              export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+              export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+              export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+              # Install Terraform
+              echo "Instaling required verison of terraform..."
+              TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+              wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+              unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+              rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+              sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+              echo "Finished installing Terraform....."
+              echo "Running terraform..."
+              export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+              echo $ARM_SUBSCRIPTION_NAME
+              echo $ARM_SUBSCRIPTION_ID
+
+              # Install JQuery
+              sudo apt-get install jq -y
+
+              cd terraform/
+              ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+              ./terraform workspace new $(ENVIRONMENT) || true
+              ./terraform workspace select $(ENVIRONMENT) || true
+              ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+              ./terraform --version
+
+              # Validate Terraform
+              echo "Validating Terraform"
+              if [[ $(./terraform validate -json | jq '.valid') == 'true' ]]; then
+                  echo "Terraform deployment is valid"
+              else
+                  echo "Terraform deployment is invalid"
+                  echo $(./terraform validate -json | jq '.diagnostics[].detail')
+                  exit 1
+              fi
+
+              # Terraform Plan
+              # Validate Terraform
+              echo "Validating Terraform and producing tfplan..."
+              echo "Creating plan file"
+              mkdir /tmp/tfplan
+              echo $(Build.BuildNumber)
+              echo $(Build.BuildId)
+              ./terraform plan --var-file=./terraform.tfvars  -out=/tmp/tfplan/$(SUBSCRIPTION_NAME).tfplan
+            displayName: "Validate"
+
+          # Create artifacts
+          - task: ArchiveFiles@2
+            displayName: "Zip Artifacts"
+            inputs:
+              rootFolderOrFile: "/tmp/tfplan/"
+              archiveType: "tar"
+              tarCompression: "gz"
+              archiveFile: "$(Build.ArtifactStagingDirectory)/$(SUBSCRIPTION_NAME)-build-$(Build.BuildId).tfplan.tar.gz"
+              replaceExistingArchive: true
+
+          # Publish Artifacts
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Artifacts"
+            inputs:
+              PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+              ArtifactName: "$(SUBSCRIPTION_NAME)"
+
+          - script: |
+              set -Eeuo pipefail
+              trap "echo ERR trap fired!" ERR
+
+              # Login to Azure Subscription
+              echo "Logging in to Azure Subscription"
+              az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+              az account set --subscription "$(SUBSCRIPTION_NAME)"
+              echo "Logged in to Azure Subscription successfully"
+
+              # Create Terraform State Storage Account
+              DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+              BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+              ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+              STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+              RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+              if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+              then
+                  echo
+                  echo "Terraform State Storage Account Already Exists"
+              else
+                  echo
+                  echo "Creating Terraform State Storage Account"
+
+                  # Create Resource Group
+                  az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+                  # Lock Resource Group
+                  az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+                  # Create Storage Account
+                  az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+                  --kind "StorageV2" \
+                  --access-tier "Cool" \
+                  --sku "Standard_ZRS" \
+                  --https-only "true" \
+                  --location "uksouth"
+
+                  # Create Container
+                  az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+                  # Enable Soft Delete
+                  az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+                  echo "Terraform State Storage Account Created Successfully"
+              fi
+
+              # Set Environment Variables
+              export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+              export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+              export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+              export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+              export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+              export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+              # Install Terraform
+              echo "Instaling required verison of terraform..."
+              TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+              wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+              unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+              rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+              sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+              echo "Finished installing Terraform....."
+              echo "Running terraform..."
+              export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+              echo $ARM_SUBSCRIPTION_NAME
+              echo $ARM_SUBSCRIPTION_ID
+
+              echo "Running terraform..."
+              cd terraform/
+              ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+              ./terraform workspace new $(ENVIRONMENT) || true
+              ./terraform workspace select $(ENVIRONMENT) || true
+              ./terraform --version
+              ./terraform apply --var-file=./terraform.tfvars -auto-approve
+              echo "Setting up security centre contacts"
+              az security contact create --email 'crc.smi@dwp.gov.uk' --name default --alert-notifications 'on' --alerts-admins 'on'  || true
+              az security contact create --email 'sre.azure@engineering.digital.dwp.gov.uk' --name default2 --alert-notifications 'on' --alerts-admins 'on'  || true
+            displayName: "Deploy"
+
+          - script: |
+              set -Eeuo pipefail
+              trap "echo ERR trap fired!" ERR
+
+              # Login to Azure Subscription
+              echo "Logging in to Azure Subscription"
+              az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+              az account set --subscription "$(SUBSCRIPTION_NAME)"
+              echo "Logged in to Azure Subscription successfully"
+
+              # Create Terraform State Storage Account
+              DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+              BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+              ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+              STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+              RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+              if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+              then
+                  echo
+                  echo "Terraform State Storage Account Already Exists"
+              else
+                  echo
+                  echo "Creating Terraform State Storage Account"
+
+                  # Create Resource Group
+                  az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+                  # Lock Resource Group
+                  az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+                  # Create Storage Account
+                  az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+                  --kind "StorageV2" \
+                  --access-tier "Cool" \
+                  --sku "Standard_ZRS" \
+                  --https-only "true" \
+                  --location "uksouth"
+
+                  # Create Container
+                  az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+                  # Enable Soft Delete
+                  az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+                  echo "Terraform State Storage Account Created Successfully"
+              fi
+
+              # Set Environment Variables
+              export AZURE_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+              export AZURE_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+              export AZURE_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+              export AZURE_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+              echo $(az account show)
+
+              # Install Inspec
+              echo "Installing Inspec CLI"
+
+              TEMP_DEB="$(mktemp)" &&
+              wget -O "$TEMP_DEB" 'https://packages.chef.io/files/stable/inspec/4.18.51/ubuntu/18.04/inspec_4.18.51-1_amd64.deb' &&
+              sudo dpkg -i "$TEMP_DEB"
+              rm -f "$TEMP_DEB"
+
+              echo "Installed Inspec CLI"
+
+              # Inspec Directory
+              cd inspec/
+
+              # Run Inspec Tests
+              echo "Running Inspec Tests"
+              inspec exec azure --input-file azure/inputs/$(ENVIRONMENT).yml -t azure:// --reporter cli html:$(ENVIRONMENT)-report.html --chef-license=accept --no-distinct-exit
+            displayName: "Inspec-Test"
+
+            # Publish report
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Artifacts"
+            inputs:
+              PathtoPublish: "inspec/$(ENVIRONMENT)-report.html"
+              ArtifactName: "inspec-report-$(ENVIRONMENT)"
+
+  #############################################################################################################
+  # Test
+  - stage: TEST
+    displayName: TEST
+    dependsOn: DEVT
+    condition: succeeded()
+    variables:
+      - name: SUBSCRIPTION_NAME
+        value: "DC-CNV-TEST"
+      # Pipeline Variables
+      - name: ENVIRONMENT
+        value: "test"
+    pool:
+      vmImage: "ubuntu-latest"
+    jobs:
+      - job: Validate
+        displayName: PDU Blueprint
+        timeoutInMinutes: 90
+
+        # steps:
+        #   - script: |
+        #       echo "Cleaning up workspace....."
+        #       rm -rf *
+        #       echo "Workspace  cleaned."
+        #     displayName: "Workspace Cleanup"  
+
+        steps:
+          - script: |
+              set -Eeuo pipefail
+              trap "echo ERR trap fired!" ERR
+
+              # Login to Azure Subscription
+              echo "Logging in to Azure Subscription"
+              az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+              az account set --subscription "$(SUBSCRIPTION_NAME)"
+              echo "Logged in to Azure Subscription successfully"
+
+              # Create Terraform State Storage Account
+              DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+              BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+              ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+              STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+              RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+              if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+              then
+                  echo
+                  echo "Terraform State Storage Account Already Exists"
+              else
+                  echo
+                  echo "Creating Terraform State Storage Account"
+
+                  # Create Resource Group
+                  az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+                  # Lock Resource Group
+                  az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+                  # Create Storage Account
+                  az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+                  --kind "StorageV2" \
+                  --access-tier "Cool" \
+                  --sku "Standard_ZRS" \
+                  --https-only "true" \
+                  --location "uksouth"
+
+                  # Create Container
+                  az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+                  # Enable Soft Delete
+                  az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+                  echo "Terraform State Storage Account Created Successfully"
+              fi
+
+              # Set Environment Variables
+              export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+              export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+              export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+              export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+              export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+              export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+              # Install Terraform
+              echo "Instaling required verison of terraform..."
+              TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+              wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+              unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+              rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+              sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+              echo "Finished installing Terraform....."
+              echo "Running terraform..."
+              export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+              echo $ARM_SUBSCRIPTION_NAME
+              echo $ARM_SUBSCRIPTION_ID
+
+              # Install JQuery
+              sudo apt-get install jq -y
+
+              cd terraform/
+              ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+              ./terraform workspace new $(ENVIRONMENT) || true
+              ./terraform workspace select $(ENVIRONMENT) || true
+              ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+              ./terraform --version
+
+              # Validate Terraform
+              echo "Validating Terraform"
+              if [[ $(./terraform validate -json | jq '.valid') == 'true' ]]; then
+                  echo "Terraform deployment is valid"
+              else
+                  echo "Terraform deployment is invalid"
+                  echo $(./terraform validate -json | jq '.diagnostics[].detail')
+                  exit 1
+              fi
+
+              # Terraform Plan
+              # Validate Terraform
+              echo "Validating Terraform and producing tfplan..."
+              echo "Creating plan file"
+              mkdir /tmp/tfplan
+              echo $(Build.BuildNumber)
+              echo $(Build.BuildId)
+              ./terraform plan --var-file=./terraform.tfvars  -out=/tmp/tfplan/$(SUBSCRIPTION_NAME).tfplan
+            displayName: "Validate"
+
+          # Create artifacts
+          - task: ArchiveFiles@2
+            displayName: "Zip Artifacts"
+            inputs:
+              rootFolderOrFile: "/tmp/tfplan/"
+              archiveType: "tar"
+              tarCompression: "gz"
+              archiveFile: "$(Build.ArtifactStagingDirectory)/$(SUBSCRIPTION_NAME)-build-$(Build.BuildId).tfplan.tar.gz"
+              replaceExistingArchive: true
+
+          # Publish Artifacts
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Artifacts"
+            inputs:
+              PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+              ArtifactName: "$(SUBSCRIPTION_NAME)"
+
+          - script: |
+              set -Eeuo pipefail
+              trap "echo ERR trap fired!" ERR
+
+              # Login to Azure Subscription
+              echo "Logging in to Azure Subscription"
+              az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+              az account set --subscription "$(SUBSCRIPTION_NAME)"
+              echo "Logged in to Azure Subscription successfully"
+
+              # Create Terraform State Storage Account
+              DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+              BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+              ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+              STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+              RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+              if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+              then
+                  echo
+                  echo "Terraform State Storage Account Already Exists"
+              else
+                  echo
+                  echo "Creating Terraform State Storage Account"
+
+                  # Create Resource Group
+                  az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+                  # Lock Resource Group
+                  az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+                  # Create Storage Account
+                  az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+                  --kind "StorageV2" \
+                  --access-tier "Cool" \
+                  --sku "Standard_ZRS" \
+                  --https-only "true" \
+                  --location "uksouth"
+
+                  # Create Container
+                  az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+                  # Enable Soft Delete
+                  az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+                  echo "Terraform State Storage Account Created Successfully"
+              fi
+
+              # Set Environment Variables
+              export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+              export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+              export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+              export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+              export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+              export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+              # Install Terraform
+              echo "Instaling required verison of terraform..."
+              TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+              wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+              unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+              rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+              sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+              echo "Finished installing Terraform....."
+              echo "Running terraform..."
+              export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+              echo $ARM_SUBSCRIPTION_NAME
+              echo $ARM_SUBSCRIPTION_ID
+
+              echo "Running terraform..."
+              cd terraform/
+              ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+              ./terraform workspace new $(ENVIRONMENT) || true
+              ./terraform workspace select $(ENVIRONMENT) || true
+              ./terraform --version
+              ./terraform apply --var-file=./terraform.tfvars -auto-approve
+              echo "Setting up security centre contacts"
+              az security contact create --email 'crc.smi@dwp.gov.uk' --name default --alert-notifications 'on' --alerts-admins 'on'  || true
+              az security contact create --email 'sre.azure@engineering.digital.dwp.gov.uk' --name default2 --alert-notifications 'on' --alerts-admins 'on'  || true
+            displayName: "Deploy"
+
+          - script: |
+              set -Eeuo pipefail
+              trap "echo ERR trap fired!" ERR
+
+              # Login to Azure Subscription
+              echo "Logging in to Azure Subscription"
+              az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+              az account set --subscription "$(SUBSCRIPTION_NAME)"
+              echo "Logged in to Azure Subscription successfully"
+
+              # Create Terraform State Storage Account
+              DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+              BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+              ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+              STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+              RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+              if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+              then
+                  echo
+                  echo "Terraform State Storage Account Already Exists"
+              else
+                  echo
+                  echo "Creating Terraform State Storage Account"
+
+                  # Create Resource Group
+                  az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+                  # Lock Resource Group
+                  az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+                  # Create Storage Account
+                  az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+                  --kind "StorageV2" \
+                  --access-tier "Cool" \
+                  --sku "Standard_ZRS" \
+                  --https-only "true" \
+                  --location "uksouth"
+
+                  # Create Container
+                  az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+                  # Enable Soft Delete
+                  az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+                  echo "Terraform State Storage Account Created Successfully"
+              fi
+
+              # Set Environment Variables
+              export AZURE_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+              export AZURE_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+              export AZURE_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+              export AZURE_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+              echo $(az account show)
+
+              # Install Inspec
+              echo "Installing Inspec CLI"
+
+              TEMP_DEB="$(mktemp)" &&
+              wget -O "$TEMP_DEB" 'https://packages.chef.io/files/stable/inspec/4.18.51/ubuntu/18.04/inspec_4.18.51-1_amd64.deb' &&
+              sudo dpkg -i "$TEMP_DEB"
+              rm -f "$TEMP_DEB"
+
+              echo "Installed Inspec CLI"
+
+              # Inspec Directory
+              cd inspec/
+
+              # Run Inspec Tests
+              echo "Running Inspec Tests"
+              inspec exec azure --input-file azure/inputs/$(ENVIRONMENT).yml -t azure:// --reporter cli html:$(ENVIRONMENT)-report.html --chef-license=accept --no-distinct-exit
+            displayName: "Inspec-Test"
+
+            # Publish report
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Artifacts"
+            inputs:
+              PathtoPublish: "inspec/$(ENVIRONMENT)-report.html"
+              ArtifactName: "inspec-report-$(ENVIRONMENT)"
+
+  ##############################################################################################################
+  # Staging
+  # - stage: STAG
+  #   displayName: STAG
+  #   dependsOn: TEST
+  #   condition: succeeded()
+  #   variables:
+  #     - name: SUBSCRIPTION_NAME
+  #       value: "DC-CNV-STAG"
+  #     # Pipeline Variables
+  #     - name: ENVIRONMENT
+  #       value: "stag"
+  #   pool:
+  #     vmImage: "ubuntu-latest"
+  #   jobs:
+  #     - job: Validate
+  #       displayName: PDU Blueprint
+  #       timeoutInMinutes: 90
+
+  #       steps:
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+  #             export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+  #             # Install Terraform
+  #             echo "Instaling required verison of terraform..."
+  #             TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+  #             wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+  #             unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+  #             rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+  #             sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+  #             echo "Finished installing Terraform....."
+  #             echo "Running terraform..."
+  #             export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+  #             echo $ARM_SUBSCRIPTION_NAME
+  #             echo $ARM_SUBSCRIPTION_ID
+
+  #             # Install JQuery
+  #             sudo apt-get install jq -y
+
+  #             cd terraform/
+  #             ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #             ./terraform workspace new $(ENVIRONMENT) || true
+  #             ./terraform workspace select $(ENVIRONMENT) || true
+  #             ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #             ./terraform --version
+
+  #             # Validate Terraform
+  #             echo "Validating Terraform"
+  #             if [[ $(./terraform validate -json | jq '.valid') == 'true' ]]; then
+  #                 echo "Terraform deployment is valid"
+  #             else
+  #                 echo "Terraform deployment is invalid"
+  #                 echo $(./terraform validate -json | jq '.diagnostics[].detail')
+  #                 exit 1
+  #             fi
+
+  #             # Terraform Plan
+  #             # Validate Terraform
+  #             echo "Validating Terraform and producing tfplan..."
+  #             echo "Creating plan file"
+  #             mkdir /tmp/tfplan
+  #             echo $(Build.BuildNumber)
+  #             echo $(Build.BuildId)
+  #             ./terraform plan --var-file=./terraform.tfvars  -out=/tmp/tfplan/$(SUBSCRIPTION_NAME).tfplan
+  #           displayName: "Validate"
+
+  #         # Create artifacts
+  #         - task: ArchiveFiles@2
+  #           displayName: "Zip Artifacts"
+  #           inputs:
+  #             rootFolderOrFile: "/tmp/tfplan/"
+  #             archiveType: "tar"
+  #             tarCompression: "gz"
+  #             archiveFile: "$(Build.ArtifactStagingDirectory)/$(SUBSCRIPTION_NAME)-build-$(Build.BuildId).tfplan.tar.gz"
+  #             replaceExistingArchive: true
+
+  #         # Publish Artifacts
+  #         - task: PublishBuildArtifacts@1
+  #           displayName: "Publish Artifacts"
+  #           inputs:
+  #             PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+  #             ArtifactName: "$(SUBSCRIPTION_NAME)"
+
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+  #             export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+  #             # Install Terraform
+  #             echo "Instaling required verison of terraform..."
+  #             TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+  #             wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+  #             unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+  #             rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+  #             sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+  #             echo "Finished installing Terraform....."
+  #             echo "Running terraform..."
+  #             export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+  #             echo $ARM_SUBSCRIPTION_NAME
+  #             echo $ARM_SUBSCRIPTION_ID
+
+  #             echo "Running terraform..."
+  #               cd terraform/
+  #               ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #               ./terraform workspace new $(ENVIRONMENT) || true
+  #               ./terraform workspace select $(ENVIRONMENT) || true
+  #               ./terraform --version
+  #               ./terraform apply --var-file=./terraform.tfvars -auto-approve
+  #               echo "Setting up security centre contacts"
+  #               az security contact create --email 'crc.smi@dwp.gov.uk' --name default --alert-notifications 'on' --alerts-admins 'on'  || true
+  #               az security contact create --email 'sre.azure@engineering.digital.dwp.gov.uk' --name default2 --alert-notifications 'on' --alerts-admins 'on'  || true
+  #           displayName: "Deploy"
+
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export AZURE_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export AZURE_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export AZURE_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export AZURE_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             echo $(az account show)
+
+  #             # Install Inspec
+  #             echo "Installing Inspec CLI"
+
+  #             TEMP_DEB="$(mktemp)" &&
+  #             wget -O "$TEMP_DEB" 'https://packages.chef.io/files/stable/inspec/4.18.51/ubuntu/18.04/inspec_4.18.51-1_amd64.deb' &&
+  #             sudo dpkg -i "$TEMP_DEB"
+  #             rm -f "$TEMP_DEB"
+
+  #             echo "Installed Inspec CLI"
+
+  #             # Inspec Directory
+  #             cd inspec/
+
+  #             # Run Inspec Tests
+  #             echo "Running Inspec Tests"
+  #             inspec exec azure --input-file azure/inputs/$(ENVIRONMENT).yml -t azure:// --reporter cli html:$(ENVIRONMENT)-report.html --chef-license=accept --no-distinct-exit
+  #           displayName: "Inspec-Test"
+
+  #           # Publish report
+  #         - task: PublishBuildArtifacts@1
+  #           displayName: "Publish Artifacts"
+  #           inputs:
+  #             PathtoPublish: "inspec/$(ENVIRONMENT)-report.html"
+  #             ArtifactName: "inspec-report-$(ENVIRONMENT)"
+
+  # ##############################################################################################################
+  # # Production
+  # - stage: PROD
+  #   displayName: PROD
+  #   dependsOn: STAG
+  #   condition: succeeded()
+  #   variables:
+  #     - name: SUBSCRIPTION_NAME
+  #       value: "DC-CNV-PROD"
+  #     # Pipeline Variables
+  #     - name: ENVIRONMENT
+  #       value: "prod"
+  #   pool:
+  #     vmImage: "ubuntu-latest"
+  #   jobs:
+  #     - job: Validate
+  #       displayName: PDU Blueprint
+  #       timeoutInMinutes: 90
+
+  #       steps:
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+  #             export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+  #             # Install Terraform
+  #             echo "Instaling required verison of terraform..."
+  #             TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+  #             wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+  #             unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+  #             rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+  #             sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+  #             echo "Finished installing Terraform....."
+  #             echo "Running terraform..."
+  #             export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+  #             echo $ARM_SUBSCRIPTION_NAME
+  #             echo $ARM_SUBSCRIPTION_ID
+
+  #             # Install JQuery
+  #             sudo apt-get install jq -y
+
+  #             cd terraform/
+  #             ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #             ./terraform workspace new $(ENVIRONMENT) || true
+  #             ./terraform workspace select $(ENVIRONMENT) || true
+  #             ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #             ./terraform --version
+
+  #             # Validate Terraform
+  #             echo "Validating Terraform"
+  #             if [[ $(./terraform validate -json | jq '.valid') == 'true' ]]; then
+  #                 echo "Terraform deployment is valid"
+  #             else
+  #                 echo "Terraform deployment is invalid"
+  #                 echo $(./terraform validate -json | jq '.diagnostics[].detail')
+  #                 exit 1
+  #             fi
+
+  #             # Terraform Plan
+  #             # Validate Terraform
+  #             echo "Validating Terraform and producing tfplan..."
+  #             echo "Creating plan file"
+  #             mkdir /tmp/tfplan
+  #             echo $(Build.BuildNumber)
+  #             echo $(Build.BuildId)
+  #             ./terraform plan --var-file=./terraform.tfvars  -out=/tmp/tfplan/$(SUBSCRIPTION_NAME).tfplan
+  #           displayName: "Validate"
+
+  #         # Create artifacts
+  #         - task: ArchiveFiles@2
+  #           displayName: "Zip Artifacts"
+  #           inputs:
+  #             rootFolderOrFile: "/tmp/tfplan/"
+  #             archiveType: "tar"
+  #             tarCompression: "gz"
+  #             archiveFile: "$(Build.ArtifactStagingDirectory)/$(SUBSCRIPTION_NAME)-build-$(Build.BuildId).tfplan.tar.gz"
+  #             replaceExistingArchive: true
+
+  #         # Publish Artifacts
+  #         - task: PublishBuildArtifacts@1
+  #           displayName: "Publish Artifacts"
+  #           inputs:
+  #             PathtoPublish: "$(Build.ArtifactStagingDirectory)"
+  #             ArtifactName: "$(SUBSCRIPTION_NAME)"
+
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export ARM_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export ARM_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export ARM_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export ARM_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             export AZDO_PERSONAL_ACCESS_TOKEN=$(prdSsDeploymentSpnPAT)
+  #             export AZDO_ORG_SERVICE_URL=https://dev.azure.com/dwpgovuk
+
+  #             # Install Terraform
+  #             echo "Instaling required verison of terraform..."
+  #             TF_VERSION=$(cat .tf_version | awk '{$1=$1};1')
+  #             wget https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip
+  #             unzip terraform_${TF_VERSION}_linux_amd64.zip -d terraform_${TF_VERSION}
+  #             rm -rf terraform_${TF_VERSION}_linux_amd64.zip
+  #             sudo mv ./terraform_${TF_VERSION}/terraform ./terraform/
+  #             echo "Finished installing Terraform....."
+  #             echo "Running terraform..."
+  #             export ARM_SUBSCRIPTION_NAME=$(az account show --query name | sed -e 's/^"//' -e 's/"$//')
+  #             echo $ARM_SUBSCRIPTION_NAME
+  #             echo $ARM_SUBSCRIPTION_ID
+
+  #             echo "Running terraform..."
+  #               cd terraform/
+  #               ./terraform init -upgrade -backend-config=./backend_config/$ENVIRONMENT.conf
+  #               ./terraform workspace new $(ENVIRONMENT) || true
+  #               ./terraform workspace select $(ENVIRONMENT) || true
+  #               ./terraform --version
+  #               ./terraform apply --var-file=./terraform.tfvars -auto-approve
+  #               echo "Setting up security centre contacts"
+  #               az security contact create --email 'crc.smi@dwp.gov.uk' --name default --alert-notifications 'on' --alerts-admins 'on'  || true
+  #               az security contact create --email 'sre.azure@engineering.digital.dwp.gov.uk' --name default2 --alert-notifications 'on' --alerts-admins 'on'  || true
+  #           displayName: "Deploy"
+
+  #         - script: |
+  #             set -Eeuo pipefail
+  #             trap "echo ERR trap fired!" ERR
+
+  #             # Login to Azure Subscription
+  #             echo "Logging in to Azure Subscription"
+  #             az login --service-principal --username $(prdSsDeploymentSpnAppId) --password $(prdSsDeploymentSpnClientSecret) --tenant "96f1f6e9-1057-4117-ac28-80cdfe86f8c3" > /dev/null
+  #             az account set --subscription "$(SUBSCRIPTION_NAME)"
+  #             echo "Logged in to Azure Subscription successfully"
+
+  #             # Create Terraform State Storage Account
+  #             DIR="$(cut -d'-' -f1 <<<$SUBSCRIPTION_NAME)"
+  #             BUSINESS_UNIT="$(cut -d'-' -f2 <<<$SUBSCRIPTION_NAME)"
+  #             ENV="$(cut -d'-' -f3 <<<$SUBSCRIPTION_NAME)"
+  #             STORAGE_ACCOUNT_NAME=$(echo "struks"$ENV$DIR$BUSINESS_UNIT"tfstate" | tr '[:upper:]' '[:lower:]')
+  #             RESOURCE_GROUP_NAME=$(echo "rg-uks-$ENV-$DIR-$BUSINESS_UNIT-tfstate" | tr '[:upper:]' '[:lower:]')
+
+  #             if az storage account show --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME > /dev/null;
+  #             then
+  #                 echo
+  #                 echo "Terraform State Storage Account Already Exists"
+  #             else
+  #                 echo
+  #                 echo "Creating Terraform State Storage Account"
+
+  #                 # Create Resource Group
+  #                 az group create --name $RESOURCE_GROUP_NAME --location "uksouth"
+
+  #                 # Lock Resource Group
+  #                 az lock create --lock-type "CanNotDelete" --name "$RESOURCE_GROUP_NAME-Lock" --resource-group $RESOURCE_GROUP_NAME
+
+  #                 # Create Storage Account
+  #                 az storage account create --name $STORAGE_ACCOUNT_NAME --resource-group $RESOURCE_GROUP_NAME \
+  #                 --kind "StorageV2" \
+  #                 --access-tier "Cool" \
+  #                 --sku "Standard_ZRS" \
+  #                 --https-only "true" \
+  #                 --location "uksouth"
+
+  #                 # Create Container
+  #                 az storage container create --name "tfstate" --account-name $STORAGE_ACCOUNT_NAME
+
+  #                 # Enable Soft Delete
+  #                 az storage blob service-properties delete-policy update --days-retained 7  --account-name $STORAGE_ACCOUNT_NAME --enable true
+  #                 echo "Terraform State Storage Account Created Successfully"
+  #             fi
+
+  #             # Set Environment Variables
+  #             export AZURE_CLIENT_ID=$(prdSsDeploymentSpnAppId)
+  #             export AZURE_CLIENT_SECRET=$(prdSsDeploymentSpnClientSecret)
+  #             export AZURE_SUBSCRIPTION_ID=$(az account show --query id | sed -e 's/^"//' -e 's/"$//')
+  #             export AZURE_TENANT_ID=$(az account show --query tenantId | sed -e 's/^"//' -e 's/"$//')
+  #             echo $(az account show)
+
+  #             # Install Inspec
+  #             echo "Installing Inspec CLI"
+
+  #             TEMP_DEB="$(mktemp)" &&
+  #             wget -O "$TEMP_DEB" 'https://packages.chef.io/files/stable/inspec/4.18.51/ubuntu/18.04/inspec_4.18.51-1_amd64.deb' &&
+  #             sudo dpkg -i "$TEMP_DEB"
+  #             rm -f "$TEMP_DEB"
+
+  #             echo "Installed Inspec CLI"
+
+  #             # Inspec Directory
+  #             cd inspec/
+
+  #             # Run Inspec Tests
+  #             echo "Running Inspec Tests"
+  #             inspec exec azure --input-file azure/inputs/$(ENVIRONMENT).yml -t azure:// --reporter cli html:$(ENVIRONMENT)-report.html --chef-license=accept --no-distinct-exit
+  #           displayName: "Inspec-Test"
+
+  #           # Publish report
+  #         - task: PublishBuildArtifacts@1
+  #           displayName: "Publish Artifacts"
+  #           inputs:
+  #             PathtoPublish: "inspec/$(ENVIRONMENT)-report.html"
+  #             ArtifactName: "inspec-report-$(ENVIRONMENT)"
