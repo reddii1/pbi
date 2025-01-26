@@ -1,0 +1,26 @@
+What is conversational Platform
+
+A conversational Platform (CP) transforms the customer journey by providing the infrastructure and core capabilities to power an automated conversational experience, replacing (or enhancing) outdated and rigid  interactive Voice Response call journeys (press1 for X, 2 for Y etc) with a voice led solution (tell me what you are calling about today.
+
+ 
+
+Conversational Platform ambition: 
+
+By March 2025, we will modernise our telephony service offering across DWP in a user-centric way, unlocking customer self-service within telephony, reducing effort and harnessing the greater controls the technology offers to adapt our customer offer with enhanced customer insight, linking telephony transformation to DWP’s wider service modernisation, whilst better protecting the public purse.
+
+
+ Key features
+
+CP will allow our citizens to speak naturally,  Provide a better insight into why the customers are calling, which then enables the following features, depending on the nature of the enquiry:
+
+•Reason For Call – Understand why the citizen is calling, enabling call steering and basic deflection.
+
+•ID&V – Orchestrate the voice to machine Identity and verification process with the trust hub.
+
+•Personalised Call Deflection - A technique of re-routing a customer's call to an alternate channel of customer service. Call deflection is the most effective way to reduce costs by moving customers to lower cost 'digital' channels.
+
+•Self-Service – Answering the caller’s query in the IVR without the need for an agent intervention (for example, advising the citizen of their next payment amount and payment date, based on capturing the customers initial utterance at the beginning of the call).
+
+•Customer Differentiation – By knowing what the citizen is calling about, we can apply differentiation treatments to improve routing the ‘right call to the right agent at the right time’
+
+Benefits
